@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Response, Depends
 from authx import AuthX, AuthXConfig
-from pydantic import BaseModel
+from app.schemas.users import UserLogicSchema
 
 
 app = FastAPI()
@@ -12,10 +12,6 @@ config.JWT_TOKEN_LOCATION = ['cookies']
 
 security = AuthX(config=config)
 
-
-class UserLogicSchema(BaseModel):
-    username: str
-    password: str
 
 @app.post('/login')
 async def login(creds: UserLogicSchema, response: Response):

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Response, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from authx import AuthX, AuthXConfig
 from app.schemas.users import UserLogicSchema
 import os
@@ -10,15 +11,23 @@ import asyncio
 
 load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
+
+
+app = FastAPI()
+# Настройка CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # URL вашего фронтенда
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # engine = create_async_engine(DATABASE_URL)
 # async def get1():
 #     async with engine.connect() as connection:
 #         res = await connection.execute(text('select 1,2,3 union select 4,5,6'))
 #         print(f'{res.first()=}')
 # asyncio.run(get1())
-
-
-app = FastAPI()
 
 
 config = AuthXConfig()
@@ -39,3 +48,8 @@ async def login(creds: UserLogicSchema, response: Response):
 @app.get('/protected', dependencies=[Depends(security.access_token_required)])
 async def protected():
     return {'data': 'SECRET'}
+
+
+@app.get('/')
+async def root():
+    return {'message': 'Start!'}

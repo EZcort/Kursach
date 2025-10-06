@@ -1,9 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from typing import Optional
-
-class UserLoginSchema(BaseModel):
-    username: str
-    password: str
 
 class UserResponseSchema(BaseModel):
     id: int
@@ -11,8 +7,14 @@ class UserResponseSchema(BaseModel):
     full_name: str
     role: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        str_strip_whitespace=True
+    )
+
+class UserLoginSchema(BaseModel):
+    username: str
+    password: str
 
 class UserCreateSchema(BaseModel):
     email: EmailStr

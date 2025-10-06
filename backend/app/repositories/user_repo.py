@@ -1,7 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Users
-from app.schemas.users import UserLogicSchema
+from app.models.users import Users
 
 class UserRepository:
     
@@ -16,9 +15,7 @@ class UserRepository:
     async def verify_user_credentials(session: AsyncSession,username: str, password: str ) -> Users | None:
         """Проверить учетные данные пользователя"""
         user = await UserRepository.get_user_by_username(session, username)
-        
-        # В реальном приложении здесь должно быть сравнение хешей паролей
-        if user and user.password == password:  # ⚠️ Замените на проверку хеша!
+        if user and user.password == password:
             return user
         return None
     

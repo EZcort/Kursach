@@ -4,10 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import app.routers.Auth as Auth
 
-
 load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
-
 
 app = FastAPI()
 

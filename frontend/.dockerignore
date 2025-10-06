@@ -2,5 +2,10 @@
 .gitignore
 node_modules
 .next
+.nuxt
+.cache
+dist
+build
 .DS_Store
 .vscode
+.env*.local

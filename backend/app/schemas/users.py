@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 
 class UserResponseSchema(BaseModel):
@@ -13,11 +13,11 @@ class UserResponseSchema(BaseModel):
     )
 
 class UserLoginSchema(BaseModel):
-    username: str
-    password: str
+    email: EmailStr = Field(..., description="Email пользователя")
+    password: str = Field(..., min_length=1, description="Пароль")
 
 class UserCreateSchema(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-    role: Optional[str] = 'user'
+    email: EmailStr = Field(..., description="Email пользователя")
+    password: str = Field(..., min_length=1, description="Пароль")
+    full_name: str = Field(..., min_length=1, description="Полное имя")
+    role: Optional[str] = Field(default='user', description="Роль пользователя")

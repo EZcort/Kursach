@@ -31,7 +31,10 @@ services:
       - /app/.pytest_cache
       - /app/.mypy_cache
       - /app/.venv
-    command: uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      sh -c "cd /app && 
+             alembic upgrade head && 
+             uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build: ./frontend

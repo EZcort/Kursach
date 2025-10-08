@@ -7,7 +7,7 @@ from app.models.users import Users
 from fastapi import APIRouter, HTTPException, Response, Depends, status
 
 config = AuthXConfig()
-config.JWT_SECRET_KEY = 'SECRET_KEY'  # В продакшене используйте надежный секретный ключ
+config.JWT_SECRET_KEY = 'SECRET_KEY'
 config.JWT_ACCESS_COOKIE_NAME = 'my_access_token'
 config.JWT_TOKEN_LOCATION = ['cookies']
 security = AuthX(config=config)
@@ -15,13 +15,10 @@ router = APIRouter(prefix='/Authorization', tags=['Authorization'])
 
 
 @router.post('/login-cookie')
-async def login(
-    creds: UserLoginSchema,
-    response: Response,
-    db: AsyncSession = Depends(get_db)
-):
-    """Аутентификация пользователя по email и паролю"""
-    
+async def login(creds: UserLoginSchema,
+                response: Response,
+                db: AsyncSession = Depends(get_db)):
+
     user = await UserRepository.verify_user_credentials(
         session=db, 
         email=creds.email, 
@@ -29,15 +26,12 @@ async def login(
     )
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Некорректный email или пароль'
-        )
-    
-    # Создаем токен с данными пользователя
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail='Некорректный email или пароль')
+
     token_data = {'email': user.email, 'role': user.role}
-    token = security.create_access_token(uid=user.id, data=token_data)
-    security.set_access_cookie(response, token)
+    token = security.create_access_token(uid=str(user.id), data=token_data)
+    security.set_access_cookies(token, response)
     
     return {
         'access_token': token,
@@ -47,52 +41,46 @@ async def login(
 
 
 @router.get('/me', response_model=UserResponseSchema)
-async def get_current_user(
-    db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(security.access_token_required)
-):
-    """Получить информацию о текущем пользователе"""
+async def get_current_user(db: AsyncSession = Depends(get_db),
+                           token_payload = Depends(security.access_token_required)):
+    
+    user_id = token_payload.sub
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Неверный токен'
+        )
     
     user = await UserRepository.get_user_by_id(db, int(user_id))
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Пользователь не найден'
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail='Пользователь не найден')
     
     return user
 
 
 @router.get('/Protected', dependencies=[Depends(security.access_token_required)])
 async def protected():
-    """Защищенный endpoint"""
     return {'data': 'SECRET'}
 
 
 @router.post('/logout')
 async def logout(response: Response):
-    """Выход из системы"""
-    security.unset_access_cookie(response)
+    security.unset_access_cookies(response)
     return {'message': 'Успешный выход из системы'}
 
 
 @router.post('/register')
-async def register(
-    user_data: UserCreateSchema,
-    db: AsyncSession = Depends(get_db)
-):
-    """Регистрация нового пользователя"""
+async def register(user_data: UserCreateSchema,
+                   db: AsyncSession = Depends(get_db)):
 
-    # Проверяем, существует ли пользователь с таким email
     existing_user = await UserRepository.get_user_by_email(db, user_data.email)
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Пользователь с таким email уже существует'
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='Пользователь с таким email уже существует')
     
-    # Создаем нового пользователя
     new_user = await UserRepository.create_user(db, {
         'email': user_data.email,
         'password': user_data.password,

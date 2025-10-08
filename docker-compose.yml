@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -19,21 +19,17 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
-      PYTHONPATH: /app
+      PYTHONPATH: /backend
       UV_PROJECT_ENVIRONMENT: /opt/venv
     depends_on:
       - postgres
     networks:
       - app-network
     volumes:
-      - ./backend:/app
-      - /app/__pycache__
-      - /app/.pytest_cache
-      - /app/.mypy_cache
-      - /app/.venv
+      - ./backend:/backend
     command: >
-      sh -c "cd /app && 
-             alembic upgrade head && 
+      sh -c "uv run alembic revision --autogenerate && 
+             uv run alembic upgrade head && 
              uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
@@ -41,17 +37,16 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NODE_ENV: development
     depends_on:
       - backend
     networks:
       - app-network
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    command: npm run dev
+      - ./frontend:/frontend
+      - /frontend/node_modules
+      - /frontend/.next
 
 volumes:
   postgres_data:

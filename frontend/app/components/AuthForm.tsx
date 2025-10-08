@@ -1,6 +1,8 @@
+// AuthForm.tsx
 'use client';
 
 import { useState } from 'react';
+import { apiClient, LoginData, RegisterData } from '@/app/lib/api';
 
 interface FormData {
   email: string;
@@ -17,6 +19,8 @@ export default function AuthForm() {
     confirmPassword: '',
     name: ''
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -24,12 +28,75 @@ export default function AuthForm() {
       ...prev,
       [name]: value
     }));
+    // Очищаем ошибку при изменении поля
+    if (error) setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateForm = (): boolean => {
+    if (!formData.email || !formData.password) {
+      setError('Email и пароль обязательны для заполнения');
+      return false;
+    }
+
+    if (activeTab === 'register') {
+      if (!formData.name) {
+        setError('Имя обязательно для заполнения');
+        return false;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setError('Пароли не совпадают');
+        return false;
+      }
+      if (formData.password.length < 6) {
+        setError('Пароль должен содержать минимум 6 символов');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(`${activeTab === 'login' ? 'Вход' : 'Регистрация'} данные:`, formData);
-    // Здесь будет реализация отправки данных
+    setError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      if (activeTab === 'login') {
+        const loginData: LoginData = {
+          email: formData.email,
+          password: formData.password
+        };
+        const response = await apiClient.login(loginData);
+        console.log('Вход успешен:', response);
+        
+        // Редирект или обновление состояния приложения
+        window.location.href = '/dashboard'; // или используйте роутер
+      } else {
+        const registerData: RegisterData = {
+          email: formData.email,
+          password: formData.password,
+          full_name: formData.name || ''
+        };
+        const response = await apiClient.register(registerData);
+        console.log('Регистрация успешна:', response);
+        
+        // Автоматический вход после регистрации или переход на страницу входа
+        setActiveTab('login');
+        setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
+        alert('Регистрация успешна! Теперь вы можете войти в систему.');
+      }
+    } catch (err: any) {
+      console.error('Ошибка авторизации:', err);
+      setError(err.message || 'Произошла ошибка при авторизации');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,7 +110,10 @@ export default function AuthForm() {
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            onClick={() => setActiveTab('login')}
+            onClick={() => {
+              setActiveTab('login');
+              setError(null);
+            }}
           >
             Вход
           </button>
@@ -53,7 +123,10 @@ export default function AuthForm() {
                 ? 'bg-blue-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            onClick={() => setActiveTab('register')}
+            onClick={() => {
+              setActiveTab('register');
+              setError(null);
+            }}
           >
             Регистрация
           </button>
@@ -61,6 +134,12 @@ export default function AuthForm() {
 
         {/* Форма */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+
           {activeTab === 'register' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -73,6 +152,7 @@ export default function AuthForm() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Введите ваше имя"
+                required
               />
             </div>
           )}
@@ -88,6 +168,7 @@ export default function AuthForm() {
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="example@mail.com"
+              required
             />
           </div>
 
@@ -102,6 +183,7 @@ export default function AuthForm() {
               onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Введите пароль"
+              required
             />
           </div>
 
@@ -117,15 +199,17 @@ export default function AuthForm() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Повторите пароль"
+                required
               />
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors duration-300"
+            disabled={isLoading}
+            className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 disabled:bg-blue-300 transition-colors duration-300"
           >
-            {activeTab === 'login' ? 'Войти' : 'Зарегистрироваться'}
+            {isLoading ? 'Загрузка...' : activeTab === 'login' ? 'Войти' : 'Зарегистрироваться'}
           </button>
         </form>
 
@@ -135,7 +219,10 @@ export default function AuthForm() {
             <p className="text-sm text-gray-600">
               Нет аккаунта?{' '}
               <button
-                onClick={() => setActiveTab('register')}
+                onClick={() => {
+                  setActiveTab('register');
+                  setError(null);
+                }}
                 className="text-blue-500 hover:text-blue-600 font-semibold"
               >
                 Зарегистрироваться
@@ -145,7 +232,10 @@ export default function AuthForm() {
             <p className="text-sm text-gray-600">
               Уже есть аккаунт?{' '}
               <button
-                onClick={() => setActiveTab('login')}
+                onClick={() => {
+                  setActiveTab('login');
+                  setError(null);
+                }}
                 className="text-blue-500 hover:text-blue-600 font-semibold"
               >
                 Войти

@@ -1,5 +1,5 @@
 FROM node:22.19-alpine
-WORKDIR /app
+WORKDIR /frontend
 
 COPY package*.json ./
 COPY tsconfig.json ./

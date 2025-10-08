@@ -1,5 +1,5 @@
 FROM python:3.13.7-slim
-WORKDIR /app
+WORKDIR /backend
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN pip install uv

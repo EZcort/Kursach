@@ -38,7 +38,7 @@ class ApiClient {
 
   async request(endpoint: string, options: RequestInit = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('API Request:', url);
+    console.log('API Request:', url, options);
     
     const response = await fetch(url, {
       headers: {
@@ -48,6 +48,8 @@ class ApiClient {
       credentials: 'include',
       ...options,
     });
+
+    console.log('API Response:', response.status, response.statusText);
 
     if (!response.ok) {
       let errorDetail = 'Request failed';
@@ -85,11 +87,13 @@ class ApiClient {
   }
 
   async getCurrentUser(): Promise<User> {
-    return this.request('/Authorization/me');
+    return this.request('/Authorization/me', {
+      method: 'GET',
+    });
   }
 
-  async logout(): Promise<any> {
-    return this.request('/Authorization/logout', {
+  async logout(): Promise<void> {
+    await this.request('/Authorization/logout', {
       method: 'POST',
     });
   }

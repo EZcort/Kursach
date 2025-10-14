@@ -30,3 +30,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(AbstractModel.metadata.create_all)

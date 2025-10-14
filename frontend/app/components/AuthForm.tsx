@@ -1,8 +1,7 @@
-// AuthForm.tsx
 'use client';
 
 import { useState } from 'react';
-import { apiClient, LoginData, RegisterData } from '@/app/lib/api';
+import { apiClient, LoginData, RegisterData } from '@/app/api/auth';
 
 interface FormData {
   email: string;

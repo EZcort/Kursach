@@ -28,8 +28,7 @@ services:
     volumes:
       - ./backend:/backend
     command: >
-      sh -c "uv run alembic revision --autogenerate && 
-             uv run alembic upgrade head && 
+      sh -c "uv run alembic upgrade head && 
              uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:

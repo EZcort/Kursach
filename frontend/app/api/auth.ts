@@ -1,4 +1,3 @@
-// lib/api.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface LoginData {
@@ -26,9 +25,7 @@ export interface User {
   role: string;
 }
 
-// Динамическое определение URL
 const getApiBaseUrl = () => {
-  // Всегда используем публичный URL на клиенте
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 };
 
@@ -41,14 +38,14 @@ class ApiClient {
 
   async request(endpoint: string, options: RequestInit = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('API Request:', url); // Для отладки
+    console.log('API Request:', url);
     
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      credentials: 'include', // Для работы с cookies
+      credentials: 'include',
       ...options,
     });
 
@@ -63,7 +60,6 @@ class ApiClient {
       throw new Error(errorDetail);
     }
 
-    // Для пустых ответов (например, logout)
     if (response.status === 204) {
       return null;
     }
@@ -99,5 +95,4 @@ class ApiClient {
   }
 }
 
-// Создаем инстанс с правильным URL
 export const apiClient = new ApiClient();

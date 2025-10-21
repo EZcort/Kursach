@@ -11,7 +11,8 @@ router = APIRouter(prefix='/payments', tags=['Payments'])
 @router.get('/services', response_model=List[UtilityServiceResponseSchema])
 async def get_utility_services(db: AsyncSession = Depends(get_db)):
     """Получить список услуг ЖКХ"""
-    return await PaymentRepository.get_utility_services(db)
+    services = await PaymentRepository.get_utility_services(db)
+    return [UtilityServiceResponseSchema.model_validate(service) for service in services]
 
 @router.post('/submit-reading')
 async def submit_meter_reading(
@@ -34,7 +35,28 @@ async def get_my_payments(
 ):
     """Получить историю платежей пользователя"""
     user_id = int(token_payload.sub)
-    return await PaymentRepository.get_user_payments(db, user_id)
+    payments = await PaymentRepository.get_user_payments(db, user_id)
+    return [PaymentResponseSchema.model_validate(payment) for payment in payments]
+
+@router.get('/my-readings', response_model=List[MeterReadingResponseSchema])
+async def get_my_readings(
+    db: AsyncSession = Depends(get_db),
+    token_payload = Depends(security.access_token_required)
+):
+    """Получить показания пользователя"""
+    user_id = int(token_payload.sub)
+    readings = await MeterReadingRepository.get_user_readings(db, user_id)
+    return [MeterReadingResponseSchema.model_validate(reading) for reading in readings]
+
+@router.get('/my-receipts', response_model=List[ReceiptResponseSchema])
+async def get_my_receipts(
+    db: AsyncSession = Depends(get_db),
+    token_payload = Depends(security.access_token_required)
+):
+    """Получить квитанции пользователя"""
+    user_id = int(token_payload.sub)
+    receipts = await ReceiptRepository.get_user_receipts(db, user_id)
+    return [ReceiptResponseSchema.model_validate(receipt) for receipt in receipts]
 
 @router.post('/create-payment')
 async def create_payment(
@@ -57,7 +79,6 @@ async def process_payment(
     token_payload = Depends(security.access_token_required)
 ):
     """Обработать платеж (заглушка)"""
-    # Здесь должна быть логика интеграции с платежной системой
     payment = await PaymentRepository.get_payment_by_id(db, payment_info.payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Платеж не найден")
@@ -65,29 +86,6 @@ async def process_payment(
     if payment.user_id != int(token_payload.sub):
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     
-    # Заглушка для успешного платежа
     await PaymentRepository.update_payment_status(db, payment_info.payment_id, 'completed', 'txn_12345')
     
     return {"message": "Платеж успешно обработан", "status": "completed"}
-
-# В app/routers/payments.py добавьте:
-
-@router.get('/my-readings', response_model=List[MeterReadingResponseSchema])
-async def get_my_readings(
-    db: AsyncSession = Depends(get_db),
-    token_payload = Depends(security.access_token_required)
-):
-    """Получить показания пользователя"""
-    user_id = int(token_payload.sub)
-    readings = await MeterReadingRepository.get_user_readings(db, user_id)
-    return readings
-
-@router.get('/my-receipts', response_model=List[ReceiptResponseSchema])
-async def get_my_receipts(
-    db: AsyncSession = Depends(get_db),
-    token_payload = Depends(security.access_token_required)
-):
-    """Получить квитанции пользователя"""
-    user_id = int(token_payload.sub)
-    receipts = await ReceiptRepository.get_user_receipts(db, user_id)
-    return receipts

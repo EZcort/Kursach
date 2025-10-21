@@ -1,6 +1,7 @@
 # app/repositories/payment_repo.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from app.models.payments import Payment, UtilityService, MeterReading, Receipt
 from typing import List, Optional
 from datetime import datetime
@@ -18,6 +19,7 @@ class PaymentRepository:
     async def get_user_payments(session: AsyncSession, user_id: int) -> List[Payment]:
         result = await session.execute(
             select(Payment)
+            .options(selectinload(Payment.service))  # Явно загружаем связанную услугу
             .where(Payment.user_id == user_id)
             .order_by(Payment.period.desc())
         )
@@ -33,7 +35,11 @@ class PaymentRepository:
     
     @staticmethod
     async def get_payment_by_id(session: AsyncSession, payment_id: int) -> Optional[Payment]:
-        result = await session.execute(select(Payment).where(Payment.id == payment_id))
+        result = await session.execute(
+            select(Payment)
+            .options(selectinload(Payment.service))
+            .where(Payment.id == payment_id)
+        )
         return result.scalar_one_or_none()
     
     @staticmethod
@@ -63,6 +69,7 @@ class MeterReadingRepository:
     async def get_user_readings(session: AsyncSession, user_id: int) -> List[MeterReading]:
         result = await session.execute(
             select(MeterReading)
+            .options(selectinload(MeterReading.service))  # Явно загружаем связанную услугу
             .where(MeterReading.user_id == user_id)
             .order_by(MeterReading.period.desc())
         )
@@ -85,4 +92,10 @@ class ReceiptRepository:
             .where(Receipt.user_id == user_id)
             .order_by(Receipt.period.desc())
         )
+        return result.scalars().all()
+    
+    @staticmethod
+    async def get_utility_services(session: AsyncSession) -> List[UtilityService]:
+        result = await session.execute(
+            select(UtilityService).order_by(UtilityService.is_active.desc(), UtilityService.name))
         return result.scalars().all()

@@ -1,18 +1,19 @@
 # app/seed_data.py
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.repositories.user_repo import UserRepository
-from app.repositories.payment_repo import PaymentRepository
-from app.models.payments import UtilityService
+from app.models.payments import UtilityService, Payment, MeterReading
+from app.models.users import Users
 from datetime import datetime
 
 async def seed_database(session: AsyncSession):
     """Заполнение базы данных начальными данными"""
     
     # Проверяем, есть ли уже данные
-    result = await session.execute("SELECT COUNT(*) FROM users")
-    user_count = result.scalar()
+    result = await session.execute(select(Users))
+    users = result.scalars().all()
     
-    if user_count > 0:
+    if users:
         print("База данных уже содержит данные, пропускаем заполнение")
         return
     
@@ -54,6 +55,7 @@ async def seed_database(session: AsyncSession):
         session.add(service)
     
     await session.commit()
+    print("Услуги ЖКХ созданы")
     
     # Создаем пользователей
     users_data = [
@@ -97,10 +99,7 @@ async def seed_database(session: AsyncSession):
         created_users.append(user)
         print(f"Создан пользователь: {user.email} ({user.role})")
     
-    # Создаем тестовые платежи для обычных пользователей
-    from app.models.payments import Payment, MeterReading
-    
-    # Только для обычных пользователей (не админа)
+    # Создаем тестовые платежи и показания для обычных пользователей
     regular_users = [user for user in created_users if user.role == 'user']
     
     for user in regular_users:
@@ -109,7 +108,7 @@ async def seed_database(session: AsyncSession):
             payment = Payment(
                 user_id=user.id,
                 service_id=service.id,
-                amount=150.0 + (i * 50),  # Разные суммы для разных услуг
+                amount=150.0 + (i * 50),
                 period=datetime(2024, 1, 1),
                 status='completed',
                 payment_date=datetime(2024, 1, 5),
@@ -122,7 +121,7 @@ async def seed_database(session: AsyncSession):
             reading = MeterReading(
                 user_id=user.id,
                 service_id=service.id,
-                value=100.0 + (user.id * 10),  # Разные показания
+                value=100.0 + (user.id * 10),
                 reading_date=datetime(2024, 1, 1),
                 period=datetime(2024, 1, 1)
             )
@@ -130,12 +129,3 @@ async def seed_database(session: AsyncSession):
     
     await session.commit()
     print("Начальные данные успешно добавлены в базу данных!")
-
-# В seed_data.py добавьте:
-async def seed_database(session: AsyncSession, force: bool = False):
-    if not force:
-        result = await session.execute("SELECT COUNT(*) FROM users")
-        user_count = result.scalar()
-        if user_count > 0:
-            print("База данных уже содержит данные, пропускаем заполнение")
-            return

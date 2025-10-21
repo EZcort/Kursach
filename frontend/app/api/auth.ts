@@ -249,6 +249,22 @@ class ApiClient {
       body: JSON.stringify({ period }),
     });
   }
+
+  async getAllUtilityServices(): Promise<UtilityService[]> {
+    return this.request('/admin/utility-services', {
+      method: 'GET',
+    });
+  }
+
+  async deleteUtilityService(serviceId: number): Promise<any> {
+    return this.request(`/admin/utility-services/${serviceId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  isAdmin(user: User | null): boolean {
+    return user?.role === 'admin';
+  }
 }
 
 export const apiClient = new ApiClient();

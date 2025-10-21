@@ -56,46 +56,60 @@ export default function AuthForm() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  e.preventDefault();
+  setError(null);
 
-    if (!validateForm()) {
+  if (!validateForm()) {
       return;
-    }
+  }
 
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
+  try {
       if (activeTab === 'login') {
-        const loginData: LoginData = {
+      const loginData: LoginData = {
           email: formData.email,
           password: formData.password
-        };
-        const response = await apiClient.login(loginData);
-        console.log('Вход успешен:', response);
-        
-        // Редирект или обновление состояния приложения
-        window.location.href = '/dashboard'; // или используйте роутер
+      };
+      const response = await apiClient.login(loginData);
+      console.log('Вход успешен:', response);
+      
+      // Редирект на главную страницу после успешного входа
+      setTimeout(() => {
+          window.location.href = '/dashboard';
+      }, 100);
       } else {
-        const registerData: RegisterData = {
+      // РЕГИСТРАЦИЯ + АВТОМАТИЧЕСКИЙ ВХОД
+      const registerData: RegisterData = {
           email: formData.email,
           password: formData.password,
           full_name: formData.name || ''
-        };
-        const response = await apiClient.register(registerData);
-        console.log('Регистрация успешна:', response);
-        
-        // Автоматический вход после регистрации или переход на страницу входа
-        setActiveTab('login');
-        setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
-        alert('Регистрация успешна! Теперь вы можете войти в систему.');
+      };
+      
+      // 1. Регистрируем пользователя
+      const registerResponse = await apiClient.register(registerData);
+      console.log('Регистрация успешна:', registerResponse);
+      
+      // 2. Автоматически входим после успешной регистрации
+      const loginData: LoginData = {
+          email: formData.email,
+          password: formData.password
+      };
+      
+      const loginResponse = await apiClient.login(loginData);
+      console.log('Автоматический вход после регистрации:', loginResponse);
+      
+      // 3. Редирект на главную страницу
+      setTimeout(() => {
+          window.location.href = '/dashboard';
+      }, 100);
       }
-    } catch (err: any) {
+  } catch (err: any) {
       console.error('Ошибка авторизации:', err);
       setError(err.message || 'Произошла ошибка при авторизации');
-    } finally {
+  } finally {
       setIsLoading(false);
-    }
+  }
   };
 
   return (

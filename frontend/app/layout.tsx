@@ -1,8 +1,9 @@
+// app/layout.tsx
 import './globals.css';
 
 export const metadata = {
-  title: 'Авторизация',
-  description: 'Страница входа и регистрации',
+  title: 'Мое приложение',
+  description: 'Приложение с авторизацией',
 };
 
 export default function RootLayout({
@@ -12,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body className="min-h-screen">
+        {children}
+      </body>
     </html>
   );
 }

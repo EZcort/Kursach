@@ -1,3 +1,4 @@
+# app/database.py
 import os
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -16,7 +17,6 @@ AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_
 
 @as_declarative()
 class AbstractModel:
-
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     @declared_attr.directive
@@ -33,4 +33,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db():
     async with engine.begin() as conn:
+        # Импортируем все модели для регистрации
+        from app.models import users, payments
         await conn.run_sync(AbstractModel.metadata.create_all)
+    
+    # Заполняем базу начальными данными
+    async with AsyncSessionLocal() as session:
+        from app.seed_data import seed_database
+        await seed_database(session)

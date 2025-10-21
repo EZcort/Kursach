@@ -28,7 +28,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-routers = [Auth.router]
+# Импортируем новые роутеры
+from app.routers import payments, admin
+
+routers = [
+    Auth.router,
+    payments.router,
+    admin.router
+]
+
 [app.include_router(router) for router in routers]
 
 @app.get("/")

@@ -1,3 +1,4 @@
+// app/api/auth.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface LoginData {
@@ -10,6 +11,8 @@ export interface RegisterData {
   password: string;
   full_name: string;
   role?: string;
+  address?: string;
+  phone?: string;
 }
 
 export interface AuthResponse {
@@ -23,6 +26,68 @@ export interface User {
   email: string;
   full_name: string;
   role: string;
+  address?: string;
+  phone?: string;
+}
+
+// Новые интерфейсы для ЖКХ
+export interface UtilityService {
+  id: number;
+  name: string;
+  description: string;
+  unit: string;
+  rate: number;
+  is_active: boolean;
+}
+
+export interface MeterReading {
+  id: number;
+  user_id: number;
+  service_id: number;
+  value: number;
+  reading_date: string;
+  period: string;
+  service?: UtilityService;
+}
+
+export interface Payment {
+  id: number;
+  user_id: number;
+  service_id: number;
+  amount: number;
+  status: string;
+  period: string;
+  payment_date?: string;
+  transaction_id?: string;
+  service?: UtilityService;
+}
+
+export interface Receipt {
+  id: number;
+  user_id: number;
+  total_amount: number;
+  period: string;
+  generated_date: string;
+  status: string;
+}
+
+export interface MeterReadingCreateData {
+  service_id: number;
+  value: number;
+  period: string;
+}
+
+export interface PaymentCreateData {
+  service_id: number;
+  amount: number;
+  period: string;
+}
+
+export interface PaymentProcessingData {
+  payment_id: number;
+  card_number: string;
+  expiry_date: string;
+  cvv: string;
 }
 
 const getApiBaseUrl = () => {
@@ -69,6 +134,7 @@ class ApiClient {
     return response.json();
   }
 
+  // Аутентификация
   async login(loginData: LoginData): Promise<AuthResponse> {
     return this.request('/Authorization/login-cookie', {
       method: 'POST',
@@ -95,6 +161,92 @@ class ApiClient {
   async logout(): Promise<void> {
     await this.request('/Authorization/logout', {
       method: 'POST',
+    });
+  }
+
+  // Платежи и услуги ЖКХ
+  async getUtilityServices(): Promise<UtilityService[]> {
+    return this.request('/payments/services', {
+      method: 'GET',
+    });
+  }
+
+  async submitMeterReading(readingData: MeterReadingCreateData): Promise<any> {
+    return this.request('/payments/submit-reading', {
+      method: 'POST',
+      body: JSON.stringify(readingData),
+    });
+  }
+
+  async getMyPayments(): Promise<Payment[]> {
+    return this.request('/payments/my-payments', {
+      method: 'GET',
+    });
+  }
+
+  async createPayment(paymentData: PaymentCreateData): Promise<any> {
+    return this.request('/payments/create-payment', {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+  }
+
+  async processPayment(paymentData: PaymentProcessingData): Promise<any> {
+    return this.request('/payments/process-payment', {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+  }
+
+  async getMyMeterReadings(): Promise<MeterReading[]> {
+    return this.request('/payments/my-readings', {
+      method: 'GET',
+    });
+  }
+
+  async getMyReceipts(): Promise<Receipt[]> {
+    return this.request('/payments/my-receipts', {
+      method: 'GET',
+    });
+  }
+
+  // Админ методы
+  async getAllUsers(): Promise<User[]> {
+    return this.request('/admin/users', {
+      method: 'GET',
+    });
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return this.request('/admin/payments', {
+      method: 'GET',
+    });
+  }
+
+  async getAllMeterReadings(): Promise<MeterReading[]> {
+    return this.request('/admin/meter-readings', {
+      method: 'GET',
+    });
+  }
+
+  async createUtilityService(serviceData: any): Promise<UtilityService> {
+    return this.request('/admin/utility-services', {
+      method: 'POST',
+      body: JSON.stringify(serviceData),
+    });
+  }
+
+  async updateUtilityService(serviceId: number, serviceData: any): Promise<UtilityService> {
+    return this.request(`/admin/utility-services/${serviceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(serviceData),
+    });
+  }
+
+  async generateReceipts(period: string): Promise<any> {
+    return this.request('/admin/generate-receipts', {
+      method: 'POST',
+      body: JSON.stringify({ period }),
     });
   }
 }

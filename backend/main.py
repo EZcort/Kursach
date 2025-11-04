@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import app.routers.Auth as Auth
 from app.database import init_db
 
 load_dotenv()
@@ -29,12 +28,14 @@ app.add_middleware(
 )
 
 # Импортируем новые роутеры
-from app.routers import payments, admin
+from app.routers import payments, admin, Auth, balance, receipts
 
 routers = [
     Auth.router,
     payments.router,
-    admin.router
+    admin.router,
+    balance.router,
+    receipts.router
 ]
 
 [app.include_router(router) for router in routers]

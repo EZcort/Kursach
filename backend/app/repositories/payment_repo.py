@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from app.models.payments import Payment, UtilityService, MeterReading, Receipt
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 
 class PaymentRepository:
     
@@ -19,7 +20,7 @@ class PaymentRepository:
     async def get_user_payments(session: AsyncSession, user_id: int) -> List[Payment]:
         result = await session.execute(
             select(Payment)
-            .options(selectinload(Payment.service))  # Явно загружаем связанную услугу
+            .options(selectinload(Payment.service))
             .where(Payment.user_id == user_id)
             .order_by(Payment.period.desc())
         )
@@ -27,6 +28,10 @@ class PaymentRepository:
     
     @staticmethod
     async def create_payment(session: AsyncSession, payment_data: dict) -> Payment:
+        # Конвертируем amount в Decimal если нужно
+        if 'amount' in payment_data and isinstance(payment_data['amount'], float):
+            payment_data['amount'] = Decimal(str(payment_data['amount']))
+            
         payment = Payment(**payment_data)
         session.add(payment)
         await session.commit()
@@ -59,6 +64,10 @@ class MeterReadingRepository:
     
     @staticmethod
     async def submit_reading(session: AsyncSession, reading_data: dict) -> MeterReading:
+        # Конвертируем value в Decimal если нужно
+        if 'value' in reading_data and isinstance(reading_data['value'], float):
+            reading_data['value'] = Decimal(str(reading_data['value']))
+            
         reading = MeterReading(**reading_data)
         session.add(reading)
         await session.commit()
@@ -69,7 +78,7 @@ class MeterReadingRepository:
     async def get_user_readings(session: AsyncSession, user_id: int) -> List[MeterReading]:
         result = await session.execute(
             select(MeterReading)
-            .options(selectinload(MeterReading.service))  # Явно загружаем связанную услугу
+            .options(selectinload(MeterReading.service))
             .where(MeterReading.user_id == user_id)
             .order_by(MeterReading.period.desc())
         )
@@ -79,6 +88,10 @@ class ReceiptRepository:
     
     @staticmethod
     async def generate_receipt(session: AsyncSession, receipt_data: dict) -> Receipt:
+        # Конвертируем total_amount в Decimal если нужно
+        if 'total_amount' in receipt_data and isinstance(receipt_data['total_amount'], float):
+            receipt_data['total_amount'] = Decimal(str(receipt_data['total_amount']))
+            
         receipt = Receipt(**receipt_data)
         session.add(receipt)
         await session.commit()

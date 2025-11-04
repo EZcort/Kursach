@@ -28,6 +28,64 @@ export interface User {
   role: string;
   address?: string;
   phone?: string;
+  balance: number; // Добавляем баланс
+}
+
+// Новые интерфейсы для баланса
+export interface BalanceInfo {
+  user_id: number;
+  balance: number;
+  currency: string;
+}
+
+export interface BalanceDepositData {
+  amount: number;
+  description?: string;
+}
+
+export interface BalanceTransaction {
+  id: number;
+  user_id: number;
+  amount: number;
+  transaction_type: string;
+  description?: string;
+  status: string;
+  transaction_date: string;
+  reference_id?: string;
+}
+
+export interface ReceiptItem {
+  id: number;
+  receipt_id: number;
+  service_id: number;
+  quantity: number;
+  rate: number;
+  amount: number;
+  service?: UtilityService;
+}
+
+export interface ReceiptDetail {
+  id: number;
+  user_id: number;
+  total_amount: number;
+  period: string;
+  generated_date: string;
+  status: string;
+  receipt_items: ReceiptItem[];
+}
+
+export interface ConsumptionChange {
+  quantity_change: number;
+  amount_change: number;
+  change_percentage: number;
+  current_quantity: number;
+  previous_quantity: number;
+}
+
+export interface ReceiptComparison {
+  current_receipt: ReceiptDetail;
+  previous_receipt?: ReceiptDetail;
+  consumption_changes: { [serviceName: string]: ConsumptionChange };
 }
 
 // Новые интерфейсы для ЖКХ
@@ -265,6 +323,61 @@ class ApiClient {
   isAdmin(user: User | null): boolean {
     return user?.role === 'admin';
   }
+
+    // Баланс
+  async getMyBalance(): Promise<BalanceInfo> {
+    return this.request('/balance/my-balance', {
+      method: 'GET',
+    });
+  }
+
+  async depositBalance(depositData: BalanceDepositData): Promise<any> {
+    return this.request('/balance/deposit', {
+      method: 'POST',
+      body: JSON.stringify(depositData),
+    });
+  }
+
+  async getBalanceTransactions(): Promise<BalanceTransaction[]> {
+    return this.request('/balance/transactions', {
+      method: 'GET',
+    });
+  }
+
+// Оплата через баланс (упрощенная)
+  async payWithBalance(paymentId: number): Promise<any> {
+    return this.request('/payments/process-payment', {
+      method: 'POST',
+      body: JSON.stringify({
+        payment_id: paymentId,
+        card_number: "balance", // Заглушка для совместимости
+        expiry_date: "12/99",
+        cvv: "000"
+      }),
+    });
+  }
+
+  // Детальная информация о квитанции
+  async getReceiptDetails(receiptId: number): Promise<ReceiptDetail> {
+    return this.request(`/receipts/${receiptId}`, {
+      method: 'GET',
+    });
+  }
+
+  // Сравнение квитанций
+  async compareReceipts(receiptId: number): Promise<ReceiptComparison> {
+    return this.request(`/receipts/${receiptId}/compare`, {
+      method: 'GET',
+    });
+  }
+
+  // Все квитанции с деталями
+  async getMyReceiptsDetailed(): Promise<ReceiptDetail[]> {
+    return this.request('/receipts/user/my-receipts-detailed', {
+      method: 'GET',
+    });
+  }
+
 }
 
 export const apiClient = new ApiClient();

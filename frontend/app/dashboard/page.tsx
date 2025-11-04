@@ -5,12 +5,14 @@ import { useEffect, useState } from 'react';
 import { apiClient, User, UtilityService, Payment, MeterReading, Receipt } from '@/app/api/auth';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminPanel from '../components/AdminPanel';
+import BalanceSection from '../components/BalanceSection';
+import PaymentForm from '../components/PaymentForm';
 
 function DashboardContent() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'payments' | 'meter-readings' | 'receipts' | 'admin'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'balance' | 'payments' | 'meter-readings' | 'receipts' | 'admin'>('profile');
   
   // Данные ЖКХ
   const [services, setServices] = useState<UtilityService[]>([]);
@@ -134,14 +136,17 @@ function DashboardContent() {
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">
-                {user?.full_name} 
-                {user && apiClient.isAdmin(user) && (
-                  <span className="ml-2 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
-                    Админ
-                  </span>
-                )}
-              </span>
+              <div className="text-right">
+                <span className="text-sm text-gray-700 block">{user?.full_name}</span>
+                <span className="text-sm font-semibold text-green-600">
+                  Баланс: {formatCurrency(user?.balance || 0)}
+                </span>
+              </div>
+              {user && apiClient.isAdmin(user) && (
+                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                  Админ
+                </span>
+              )}
               <button
                 onClick={handleLogout}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
@@ -159,6 +164,7 @@ function DashboardContent() {
           <nav className="flex space-x-8">
             {[
               { id: 'profile', name: 'Профиль' },
+              { id: 'balance', name: 'Баланс' },
               { id: 'payments', name: 'Платежи' },
               { id: 'meter-readings', name: 'Показания' },
               { id: 'receipts', name: 'Квитанции' },
@@ -234,8 +240,16 @@ function DashboardContent() {
                           </span>
                         </dd>
                       </div>
+                      <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <dt className="text-sm font-medium text-gray-500">Баланс</dt>
+                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                          <span className="text-lg font-semibold text-green-600">
+                            {formatCurrency(user?.balance || 0)}
+                          </span>
+                        </dd>
+                      </div>
                       {user?.address && (
-                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                           <dt className="text-sm font-medium text-gray-500">Адрес</dt>
                           <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                             {user.address}
@@ -243,7 +257,7 @@ function DashboardContent() {
                         </div>
                       )}
                       {user?.phone && (
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                           <dt className="text-sm font-medium text-gray-500">Телефон</dt>
                           <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
                             {user.phone}
@@ -253,6 +267,11 @@ function DashboardContent() {
                     </dl>
                   </div>
                 </div>
+              )}
+
+              {/* Баланс */}
+              {activeTab === 'balance' && (
+                <BalanceSection onBalanceUpdate={fetchUserData} />
               )}
 
               {/* Платежи */}
@@ -289,6 +308,9 @@ function DashboardContent() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                   Статус
                                 </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Дата оплаты
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -314,6 +336,9 @@ function DashboardContent() {
                                       {payment.status === 'completed' ? 'Оплачен' : 
                                        payment.status === 'pending' ? 'Ожидает' : 'Ошибка'}
                                     </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {payment.payment_date ? formatDate(payment.payment_date) : '-'}
                                   </td>
                                 </tr>
                               ))}
@@ -422,69 +447,81 @@ function DashboardContent() {
 
               {/* Квитанции */}
               {activeTab === 'receipts' && (
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      Квитанции
-                    </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                      Счета за коммунальные услуги
-                    </p>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    {receipts.length === 0 ? (
-                      <div className="px-4 py-5 text-center text-gray-500">
-                        Нет данных о квитанциях
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Период
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Сумма
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Дата генерации
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Статус
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {receipts.map((receipt) => (
-                              <tr key={receipt.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {formatDate(receipt.period)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {formatCurrency(receipt.total_amount)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {formatDate(receipt.generated_date)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    receipt.status === 'paid' 
-                                      ? 'bg-green-100 text-green-800'
-                                      : receipt.status === 'generated'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {receipt.status === 'paid' ? 'Оплачена' : 
-                                     receipt.status === 'generated' ? 'Сгенерирована' : 'Отправлена'}
-                                  </span>
-                                </td>
+                <div className="space-y-6">
+                  <PaymentForm 
+                    receipts={receipts} 
+                    onPaymentSuccess={() => {
+                      fetchReceipts();
+                      // Обновляем данные пользователя для актуального баланса
+                      setTimeout(fetchUserData, 1000);
+                    }} 
+                  />
+                  
+                  {/* История квитанций */}
+                  <div className="bg-white overflow-hidden shadow rounded-lg">
+                    <div className="px-4 py-5 sm:px-6">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        История квитанций
+                      </h3>
+                      <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                        Все ваши квитанции за коммунальные услуги
+                      </p>
+                    </div>
+                    <div className="border-t border-gray-200">
+                      {receipts.length === 0 ? (
+                        <div className="px-4 py-5 text-center text-gray-500">
+                          Нет данных о квитанциях
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Период
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Сумма
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Дата генерации
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Статус
+                                </th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {receipts.map((receipt) => (
+                                <tr key={receipt.id}>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {formatDate(receipt.period)}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {formatCurrency(receipt.total_amount)}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {formatDate(receipt.generated_date)}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      receipt.status === 'paid' 
+                                        ? 'bg-green-100 text-green-800'
+                                        : receipt.status === 'generated'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {receipt.status === 'paid' ? 'Оплачена' : 
+                                       receipt.status === 'generated' ? 'Сгенерирована' : 'Ожидает оплаты'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

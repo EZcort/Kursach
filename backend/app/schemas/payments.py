@@ -131,3 +131,32 @@ class BalanceInfoResponseSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ManualReadingInput(BaseModel):
+    service_id: int
+    value: float
+
+class ReceiptVerificationSchema(BaseModel):
+    receipt_id: int
+    manual_readings: List[ManualReadingInput]
+    calculated_total: float
+
+class RateChangeInfo(BaseModel):
+    service_name: str
+    original_rate: float
+    actual_rate: float
+    change_percentage: float
+
+class RateInfoSchema(BaseModel):
+    used_actual_rates: bool
+    rate_changes: List[RateChangeInfo]
+    has_rate_changes: bool
+
+class VerificationResult(BaseModel):
+    original_amount: float
+    calculated_amount: float
+    difference: float
+    is_match: bool
+    calculation_details: List[Dict]
+    receipt_status: str
+    rate_info: RateInfoSchema

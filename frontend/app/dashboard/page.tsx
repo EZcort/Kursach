@@ -2,23 +2,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { apiClient, User, UtilityService, Payment, MeterReading, Receipt } from '@/app/api/auth';
+import { apiClient, User, UtilityService, Receipt } from '@/app/api/auth';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminPanel from '../components/AdminPanel';
-import BalanceSection from '../components/BalanceSection';
-import PaymentForm from '../components/PaymentForm';
+import BalanceManagement from '../components/BalanceManagement';
+import ReceiptPayment from '../components/ReceiptPayment';
+import ReceiptDetailView from '../components/ReceiptDetailView';
 
 function DashboardContent() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'balance' | 'payments' | 'meter-readings' | 'receipts' | 'admin'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'balance' | 'receipts' | 'admin'>('profile');
   
   // Данные ЖКХ
   const [services, setServices] = useState<UtilityService[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [readings, setReadings] = useState<MeterReading[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  
+  // Состояние для детального просмотра квитанции
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
 
   useEffect(() => {
     fetchUserData();
@@ -26,13 +28,12 @@ function DashboardContent() {
 
   useEffect(() => {
     if (user) {
-      if (activeTab === 'payments') {
-        fetchPayments();
+      // Загружаем услуги при первой загрузке пользователя
+      if (services.length === 0) {
         fetchServices();
-      } else if (activeTab === 'meter-readings') {
-        fetchReadings();
-        fetchServices();
-      } else if (activeTab === 'receipts') {
+      }
+      
+      if (activeTab === 'receipts') {
         fetchReceipts();
       }
     }
@@ -57,28 +58,13 @@ function DashboardContent() {
 
   const fetchServices = async () => {
     try {
+      console.log('Fetching services...');
       const servicesData = await apiClient.getUtilityServices();
+      console.log('Services data received:', servicesData);
       setServices(servicesData);
     } catch (err: any) {
       console.error('Error fetching services:', err);
-    }
-  };
-
-  const fetchPayments = async () => {
-    try {
-      const paymentsData = await apiClient.getMyPayments();
-      setPayments(paymentsData);
-    } catch (err: any) {
-      console.error('Error fetching payments:', err);
-    }
-  };
-
-  const fetchReadings = async () => {
-    try {
-      const readingsData = await apiClient.getMyMeterReadings();
-      setReadings(readingsData);
-    } catch (err: any) {
-      console.error('Error fetching readings:', err);
+      setError('Ошибка загрузки тарифов');
     }
   };
 
@@ -136,17 +122,14 @@ function DashboardContent() {
               </p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <span className="text-sm text-gray-700 block">{user?.full_name}</span>
-                <span className="text-sm font-semibold text-green-600">
-                  Баланс: {formatCurrency(user?.balance || 0)}
-                </span>
-              </div>
-              {user && apiClient.isAdmin(user) && (
-                <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
-                  Админ
-                </span>
-              )}
+              <span className="text-sm text-gray-700">
+                {user?.full_name} 
+                {user && apiClient.isAdmin(user) && (
+                  <span className="ml-2 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
+                    Админ
+                  </span>
+                )}
+              </span>
               <button
                 onClick={handleLogout}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
@@ -165,8 +148,6 @@ function DashboardContent() {
             {[
               { id: 'profile', name: 'Профиль' },
               { id: 'balance', name: 'Баланс' },
-              { id: 'payments', name: 'Платежи' },
-              { id: 'meter-readings', name: 'Показания' },
               { id: 'receipts', name: 'Квитанции' },
               ...(user && apiClient.isAdmin(user) ? [{ id: 'admin', name: 'Админ-панель' }] : [])
             ].map((tab) => (
@@ -209,160 +190,72 @@ function DashboardContent() {
               
               {/* Профиль */}
               {activeTab === 'profile' && (
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      Профиль пользователя
-                    </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                      Основная информация о вашем аккаунте
-                    </p>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    <dl>
-                      <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                        <dt className="text-sm font-medium text-gray-500">Полное имя</dt>
-                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                          {user?.full_name || 'Не указано'}
-                        </dd>
-                      </div>
-                      <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                        <dt className="text-sm font-medium text-gray-500">Email</dt>
-                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                          {user?.email}
-                        </dd>
-                      </div>
-                      <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                        <dt className="text-sm font-medium text-gray-500">Роль</dt>
-                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {user?.role === 'admin' ? 'Администратор' : 'Пользователь'}
-                          </span>
-                        </dd>
-                      </div>
-                      <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                        <dt className="text-sm font-medium text-gray-500">Баланс</dt>
-                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                          <span className="text-lg font-semibold text-green-600">
-                            {formatCurrency(user?.balance || 0)}
-                          </span>
-                        </dd>
-                      </div>
-                      {user?.address && (
-                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">Адрес</dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            {user.address}
-                          </dd>
-                        </div>
-                      )}
-                      {user?.phone && (
-                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                          <dt className="text-sm font-medium text-gray-500">Телефон</dt>
-                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                            {user.phone}
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
-                  </div>
-                </div>
-              )}
-
-              {/* Баланс */}
-              {activeTab === 'balance' && (
-                <BalanceSection onBalanceUpdate={fetchUserData} />
-              )}
-
-              {/* Платежи */}
-              {activeTab === 'payments' && (
                 <div className="space-y-6">
                   <div className="bg-white overflow-hidden shadow rounded-lg">
                     <div className="px-4 py-5 sm:px-6">
                       <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        История платежей
+                        Профиль пользователя
                       </h3>
                       <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        Все ваши платежи за коммунальные услуги
+                        Основная информация о вашем аккаунте
                       </p>
                     </div>
                     <div className="border-t border-gray-200">
-                      {payments.length === 0 ? (
-                        <div className="px-4 py-5 text-center text-gray-500">
-                          Нет данных о платежах
+                      <dl>
+                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                          <dt className="text-sm font-medium text-gray-500">Полное имя</dt>
+                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {user?.full_name || 'Не указано'}
+                          </dd>
                         </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Услуга
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Сумма
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Период
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Статус
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Дата оплаты
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {payments.map((payment) => (
-                                <tr key={payment.id}>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {payment.service?.name || 'Услуга'}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {formatCurrency(payment.amount)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {formatDate(payment.period)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      payment.status === 'completed' 
-                                        ? 'bg-green-100 text-green-800'
-                                        : payment.status === 'pending'
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : 'bg-red-100 text-red-800'
-                                    }`}>
-                                      {payment.status === 'completed' ? 'Оплачен' : 
-                                       payment.status === 'pending' ? 'Ожидает' : 'Ошибка'}
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {payment.payment_date ? formatDate(payment.payment_date) : '-'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                          <dt className="text-sm font-medium text-gray-500">Email</dt>
+                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            {user?.email}
+                          </dd>
                         </div>
-                      )}
+                        <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                          <dt className="text-sm font-medium text-gray-500">Роль</dt>
+                          <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {user?.role === 'admin' ? 'Администратор' : 'Пользователь'}
+                            </span>
+                          </dd>
+                        </div>
+                        {user?.address && (
+                          <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">Адрес</dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              {user.address}
+                            </dd>
+                          </div>
+                        )}
+                        {user?.phone && (
+                          <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                            <dt className="text-sm font-medium text-gray-500">Телефон</dt>
+                            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                              {user.phone}
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
                     </div>
                   </div>
 
-                  {/* Услуги */}
+                  {/* Тарифы в профиле */}
                   <div className="bg-white overflow-hidden shadow rounded-lg">
                     <div className="px-4 py-5 sm:px-6">
                       <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        Коммунальные услуги
+                        Коммунальные услуги и тарифы
                       </h3>
                       <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        Доступные услуги и тарифы
+                        Актуальные тарифы на коммунальные услуги
                       </p>
                     </div>
                     <div className="border-t border-gray-200">
                       {services.length === 0 ? (
                         <div className="px-4 py-5 text-center text-gray-500">
-                          Нет данных об услугах
+                          Загрузка тарифов...
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
@@ -385,150 +278,41 @@ function DashboardContent() {
                 </div>
               )}
 
-              {/* Показания счетчиков */}
-              {activeTab === 'meter-readings' && (
-                <div className="bg-white overflow-hidden shadow rounded-lg">
-                  <div className="px-4 py-5 sm:px-6">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      Показания счетчиков
-                    </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                      История переданных показаний
-                    </p>
-                  </div>
-                  <div className="border-t border-gray-200">
-                    {readings.length === 0 ? (
-                      <div className="px-4 py-5 text-center text-gray-500">
-                        Нет данных о показаниях
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Услуга
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Показание
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Дата подачи
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Период
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {readings.map((reading) => (
-                              <tr key={reading.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {reading.service?.name || 'Услуга'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {reading.value} {reading.service?.unit}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {formatDate(reading.reading_date)}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {formatDate(reading.period)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {/* Баланс */}
+              {activeTab === 'balance' && (
+                <BalanceManagement onBalanceUpdate={fetchUserData} />
               )}
 
               {/* Квитанции */}
               {activeTab === 'receipts' && (
-                <div className="space-y-6">
-                  <PaymentForm 
-                    receipts={receipts} 
-                    onPaymentSuccess={() => {
-                      fetchReceipts();
-                      // Обновляем данные пользователя для актуального баланса
-                      setTimeout(fetchUserData, 1000);
-                    }} 
-                  />
-                  
-                  {/* История квитанций */}
-                  <div className="bg-white overflow-hidden shadow rounded-lg">
-                    <div className="px-4 py-5 sm:px-6">
-                      <h3 className="text-lg leading-6 font-medium text-gray-900">
-                        История квитанций
-                      </h3>
-                      <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                        Все ваши квитанции за коммунальные услуги
-                      </p>
-                    </div>
-                    <div className="border-t border-gray-200">
-                      {receipts.length === 0 ? (
-                        <div className="px-4 py-5 text-center text-gray-500">
-                          Нет данных о квитанциях
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Период
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Сумма
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Дата генерации
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  Статус
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {receipts.map((receipt) => (
-                                <tr key={receipt.id}>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {formatDate(receipt.period)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {formatCurrency(receipt.total_amount)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {formatDate(receipt.generated_date)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      receipt.status === 'paid' 
-                                        ? 'bg-green-100 text-green-800'
-                                        : receipt.status === 'generated'
-                                        ? 'bg-blue-100 text-blue-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                      {receipt.status === 'paid' ? 'Оплачена' : 
-                                       receipt.status === 'generated' ? 'Сгенерирована' : 'Ожидает оплаты'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <ReceiptPayment 
+                  receipts={receipts} 
+                  onPaymentSuccess={() => {
+                    fetchReceipts();
+                    fetchUserData();
+                  }} 
+                />
               )}
             </>
           )}
         </div>
       </main>
+
+      {/* Модальное окно с деталями квитанции и проверкой */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <ReceiptDetailView 
+              receiptId={selectedReceipt.id} 
+              onClose={() => setSelectedReceipt(null)}
+              onVerificationComplete={() => {
+                setSelectedReceipt(null);
+                fetchReceipts(); // Обновляем список квитанций
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

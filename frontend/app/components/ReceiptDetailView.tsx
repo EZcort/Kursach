@@ -2,37 +2,124 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiClient, ReceiptDetail, ReceiptComparison, ConsumptionChange } from '@/app/api/auth';
+import { 
+  apiClient, 
+  ReceiptDetail, 
+  UtilityService, 
+  ManualReadingInput, 
+  CalculationDetail,
+  RateChangeInfo,
+  VerificationResult 
+} from '@/app/api/auth';
 
 interface ReceiptDetailViewProps {
   receiptId: number;
   onClose?: () => void;
+  onVerificationComplete?: () => void;
 }
 
-export default function ReceiptDetailView({ receiptId, onClose }: ReceiptDetailViewProps) {
+export default function ReceiptDetailView({ receiptId, onClose, onVerificationComplete }: ReceiptDetailViewProps) {
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
-  const [comparison, setComparison] = useState<ReceiptComparison | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'comparison'>('details');
+  const [services, setServices] = useState<UtilityService[]>([]);
+  const [manualReadings, setManualReadings] = useState<ManualReadingInput[]>([]);
+  const [calculatedTotal, setCalculatedTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [activeTab, setActiveTab] = useState<'details' | 'verification'>('details');
 
   useEffect(() => {
     fetchReceiptData();
+    fetchServices();
   }, [receiptId]);
+
+  useEffect(() => {
+    if (receipt && services.length > 0) {
+      initializeManualReadings();
+    }
+  }, [receipt, services]);
+
+  useEffect(() => {
+    calculateTotal();
+  }, [manualReadings]);
 
   const fetchReceiptData = async () => {
     try {
       setIsLoading(true);
-      const [receiptData, comparisonData] = await Promise.all([
-        apiClient.getReceiptDetails(receiptId),
-        apiClient.compareReceipts(receiptId)
-      ]);
+      const receiptData = await apiClient.getReceiptDetails(receiptId);
       setReceipt(receiptData);
-      setComparison(comparisonData);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchServices = async () => {
+    try {
+      const data = await apiClient.getUtilityServices();
+      setServices(data);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    }
+  };
+
+  const initializeManualReadings = () => {
+    if (!receipt) return;
+    
+    const initialReadings = receipt.receipt_items.map(item => ({
+      service_id: item.service_id,
+      value: item.quantity // По умолчанию используем оригинальные показания
+    }));
+    setManualReadings(initialReadings);
+  };
+
+  const calculateTotal = () => {
+    let total = 0;
+    manualReadings.forEach(reading => {
+      const service = services.find(s => s.id === reading.service_id);
+      if (service && reading.value > 0) {
+        total += reading.value * service.rate;
+      }
+    });
+    setCalculatedTotal(total);
+  };
+
+  const handleReadingChange = (serviceId: number, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setManualReadings(prev => 
+      prev.map(reading => 
+        reading.service_id === serviceId 
+          ? { ...reading, value: numValue }
+          : reading
+      )
+    );
+  };
+
+  const handleVerify = async () => {
+    try {
+      setIsVerifying(true);
+      setError(null);
+      
+      const verificationData = {
+        receipt_id: receiptId,
+        manual_readings: manualReadings.filter(reading => reading.value > 0),
+        calculated_total: calculatedTotal
+      };
+      
+      const result = await apiClient.verifyReceipt(verificationData);
+      setVerificationResult(result);
+      
+      if (result.is_match && onVerificationComplete) {
+        setTimeout(() => {
+          onVerificationComplete();
+        }, 2000);
+      }
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -55,18 +142,6 @@ export default function ReceiptDetailView({ receiptId, onClose }: ReceiptDetailV
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     }).format(num);
-  };
-
-  const getChangeColor = (change: number) => {
-    if (change > 0) return 'text-red-600';
-    if (change < 0) return 'text-green-600';
-    return 'text-gray-600';
-  };
-
-  const getChangeIcon = (change: number) => {
-    if (change > 0) return '↗';
-    if (change < 0) return '↘';
-    return '→';
   };
 
   if (isLoading) {
@@ -118,9 +193,12 @@ export default function ReceiptDetailView({ receiptId, onClose }: ReceiptDetailV
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
               receipt.status === 'paid' 
                 ? 'bg-green-100 text-green-800'
+                : receipt.status === 'verified'
+                ? 'bg-blue-100 text-blue-800'
                 : 'bg-yellow-100 text-yellow-800'
             }`}>
-              {receipt.status === 'paid' ? 'Оплачена' : 'Ожидает оплаты'}
+              {receipt.status === 'paid' ? 'Оплачена' : 
+               receipt.status === 'verified' ? 'Проверена' : 'Ожидает оплаты'}
             </span>
           </div>
         </div>
@@ -140,14 +218,14 @@ export default function ReceiptDetailView({ receiptId, onClose }: ReceiptDetailV
             Детали расчета
           </button>
           <button
-            onClick={() => setActiveTab('comparison')}
+            onClick={() => setActiveTab('verification')}
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'comparison'
+              activeTab === 'verification'
                 ? 'border-blue-500 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Сравнение
+            Проверка
           </button>
         </nav>
       </div>
@@ -206,129 +284,169 @@ export default function ReceiptDetailView({ receiptId, onClose }: ReceiptDetailV
                 </tfoot>
               </table>
             </div>
-
-            {/* Дополнительная информация */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-              <div>
-                <strong>Период:</strong> {formatDate(receipt.period)}
-              </div>
-              <div>
-                <strong>Дата генерации:</strong> {formatDate(receipt.generated_date)}
-              </div>
-              <div>
-                <strong>Статус:</strong> 
-                <span className={`ml-2 ${
-                  receipt.status === 'paid' ? 'text-green-600' : 'text-yellow-600'
-                }`}>
-                  {receipt.status === 'paid' ? 'Оплачена' : 'Ожидает оплаты'}
-                </span>
-              </div>
-              <div>
-                <strong>Количество услуг:</strong> {receipt.receipt_items.length}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* Сравнение */}
-        {activeTab === 'comparison' && (
+        {/* Проверка показаний */}
+        {activeTab === 'verification' && (
           <div>
-            <h3 className="text-lg font-semibold mb-4">
-              Сравнение с предыдущим периодом
-              {comparison?.previous_receipt && (
-                <span className="text-sm font-normal text-gray-600 ml-2">
-                  ({formatDate(comparison.previous_receipt.period)})
-                </span>
-              )}
-            </h3>
+            <h3 className="text-lg font-semibold mb-4">Проверка показаний счетчиков</h3>
+            
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <p className="font-semibold">Оригинальная сумма: {formatCurrency(receipt.total_amount)}</p>
+              <p className="text-sm text-gray-600">Период: {formatDate(receipt.period)}</p>
+              <p className="text-sm text-green-600 mt-1">
+                ✓ Используются актуальные тарифы
+              </p>
+            </div>
 
-            {!comparison?.previous_receipt ? (
-              <div className="text-center py-8 text-gray-500">
-                Нет данных для сравнения
-                <p className="text-sm mt-2">Это первая квитанция или данные за предыдущий период отсутствуют</p>
-              </div>
-            ) : (
-              <div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Услуга
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Текущее потребление
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Предыдущее потребление
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Изменение
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Влияние на сумму
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {Object.entries(comparison.consumption_changes).map(([serviceName, change]) => (
-                        <tr key={serviceName}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {serviceName}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatNumber(change.current_quantity)} 
-                            {receipt.receipt_items.find(item => item.service?.name === serviceName)?.service?.unit}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatNumber(change.previous_quantity)}
-                            {receipt.receipt_items.find(item => item.service?.name === serviceName)?.service?.unit}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <span className={`font-semibold ${getChangeColor(change.quantity_change)}`}>
-                              {getChangeIcon(change.quantity_change)} {formatNumber(Math.abs(change.quantity_change))}
-                              {change.change_percentage !== 0 && (
-                                <span className="text-xs ml-1">
-                                  ({change.change_percentage > 0 ? '+' : ''}{formatNumber(change.change_percentage, 1)}%)
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <span className={`font-semibold ${getChangeColor(change.amount_change)}`}>
-                              {getChangeIcon(change.amount_change)} {formatCurrency(Math.abs(change.amount_change))}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Сводка изменений */}
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 mb-2">Сводка изменений</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-blue-700">Общее изменение суммы:</span>
-                      <span className={`ml-2 font-semibold ${
-                        receipt.total_amount - comparison.previous_receipt.total_amount > 0 ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {formatCurrency(receipt.total_amount - comparison.previous_receipt.total_amount)}
+            {/* Информация об изменении тарифов */}
+            {verificationResult?.rate_info?.has_rate_changes && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="font-semibold text-yellow-800 mb-2">Изменения тарифов</h4>
+                <p className="text-sm text-yellow-700 mb-2">
+                  Некоторые тарифы изменились с момента создания квитанции:
+                </p>
+                <div className="space-y-2">
+                  {verificationResult.rate_info.rate_changes.map((change: RateChangeInfo, index: number) => (
+                    <div key={index} className="text-sm">
+                      <span className="font-medium">{change.service_name}:</span>
+                      <span className="ml-2 text-yellow-700">
+                        {formatCurrency(change.original_rate)} → {formatCurrency(change.actual_rate)}
+                        {change.change_percentage !== 0 && (
+                          <span className={`ml-1 ${change.change_percentage > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            ({change.change_percentage > 0 ? '+' : ''}{change.change_percentage.toFixed(1)}%)
+                          </span>
+                        )}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-blue-700">Текущий период:</span>
-                      <span className="ml-2 font-semibold">{formatCurrency(receipt.total_amount)}</span>
-                    </div>
-                    <div>
-                      <span className="text-blue-700">Предыдущий период:</span>
-                      <span className="ml-2 font-semibold">{formatCurrency(comparison.previous_receipt.total_amount)}</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             )}
+
+            <div className="space-y-4 mb-6">
+              <h4 className="font-medium">Введите показания счетчиков:</h4>
+              {receipt.receipt_items.map((item) => {
+                const service = services.find(s => s.id === item.service_id);
+                const manualReading = manualReadings.find(r => r.service_id === item.service_id);
+                const actualRate = service?.rate || 0;
+                const originalRate = item.rate;
+                const rateChanged = Math.abs(actualRate - originalRate) > 0.01;
+                
+                return (
+                  <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {service?.name}
+                      </label>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <div>
+                          <span className="font-medium">Актуальный тариф:</span>{' '}
+                          {formatCurrency(actualRate)} за {service?.unit}
+                          {rateChanged && (
+                            <span className="text-orange-600 ml-1">
+                              (был {formatCurrency(originalRate)})
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="font-medium">Оригинальное потребление:</span>{' '}
+                          {formatNumber(item.quantity)} {service?.unit}
+                        </div>
+                        {rateChanged && (
+                          <div className="text-orange-600 font-medium">
+                            ⚠ Тариф изменен
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={manualReading?.value || 0}
+                        onChange={(e) => handleReadingChange(item.service_id, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Введите значение"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <p className="font-semibold">
+                Рассчитанная сумма: {formatCurrency(calculatedTotal)}
+              </p>
+              {calculatedTotal > 0 && (
+                <p className={`text-sm ${
+                  Math.abs(calculatedTotal - receipt.total_amount) < 0.01 
+                    ? 'text-green-600' 
+                    : 'text-red-600'
+                }`}>
+                  Разница: {formatCurrency(calculatedTotal - receipt.total_amount)}
+                </p>
+              )}
+              <p className="text-sm text-gray-600 mt-1">
+                * Расчет выполнен по актуальным тарифам
+              </p>
+            </div>
+
+            {verificationResult && (
+              <div className={`mb-4 p-4 rounded-lg ${
+                verificationResult.is_match ? 'bg-green-100 border border-green-400' : 'bg-red-100 border border-red-400'
+              }`}>
+                <p className={`font-semibold ${
+                  verificationResult.is_match ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {verificationResult.is_match ? '✓ Суммы совпадают!' : '✗ Суммы не совпадают'}
+                </p>
+                
+                {/* Детали расчета с актуальными тарифами */}
+                {verificationResult.calculation_details && (
+                  <div className="mt-2 text-sm">
+                    <p className="font-medium">Детали расчета (по актуальным тарифам):</p>
+                    {verificationResult.calculation_details.map((detail: CalculationDetail, index: number) => (
+                      <div key={index} className="text-gray-600 mt-1">
+                        <span className="font-medium">{detail.service_name}:</span>{' '}
+                        {formatNumber(detail.value)} {detail.service_unit} × {formatCurrency(detail.actual_rate)} = {formatCurrency(detail.amount)}
+                        {detail.rate_changed && detail.original_rate && (
+                          <span className="text-orange-600 text-xs ml-2">
+                            (было {formatCurrency(detail.original_rate)})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Информация о тарифах */}
+                {verificationResult.rate_info?.has_rate_changes && (
+                  <div className="mt-2 p-2 bg-yellow-50 rounded">
+                    <p className="text-xs text-yellow-700">
+                      При расчете использованы актуальные тарифы. Некоторые тарифы изменились с момента создания квитанции.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleVerify}
+              disabled={isVerifying || calculatedTotal === 0}
+              className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 disabled:bg-blue-300 transition-colors"
+            >
+              {isVerifying ? 'Проверка...' : 'Проверить квитанцию'}
+            </button>
           </div>
         )}
       </div>

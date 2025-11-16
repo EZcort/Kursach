@@ -28,10 +28,9 @@ export interface User {
   role: string;
   address?: string;
   phone?: string;
-  balance: number; // Добавляем баланс
+  balance: number;
 }
 
-// Новые интерфейсы для баланса
 export interface BalanceInfo {
   user_id: number;
   balance: number;
@@ -88,7 +87,6 @@ export interface ReceiptComparison {
   consumption_changes: { [serviceName: string]: ConsumptionChange };
 }
 
-// Новые интерфейсы для ЖКХ
 export interface UtilityService {
   id: number;
   name: string;
@@ -127,6 +125,8 @@ export interface Receipt {
   period: string;
   generated_date: string;
   status: string;
+  verified_amount?: number;
+  verification_date?: string;
 }
 
 export interface MeterReadingCreateData {
@@ -146,6 +146,51 @@ export interface PaymentProcessingData {
   card_number: string;
   expiry_date: string;
   cvv: string;
+}
+
+export interface ManualReadingInput {
+  service_id: number;
+  value: number;
+}
+
+export interface ReceiptVerificationData {
+  receipt_id: number;
+  manual_readings: ManualReadingInput[];
+  calculated_total: number;
+}
+
+export interface CalculationDetail {
+  service_id: number;
+  service_name: string;
+  service_unit: string;
+  value: number;
+  original_rate: number | null;
+  actual_rate: number;
+  amount: number;
+  rate_changed: boolean;
+}
+
+export interface RateChangeInfo {
+  service_name: string;
+  original_rate: number;
+  actual_rate: number;
+  change_percentage: number;
+}
+
+export interface RateInfo {
+  used_actual_rates: boolean;
+  rate_changes: RateChangeInfo[];
+  has_rate_changes: boolean;
+}
+
+export interface VerificationResult {
+  original_amount: number;
+  calculated_amount: number;
+  difference: number;
+  is_match: boolean;
+  calculation_details: CalculationDetail[];
+  receipt_status: string;
+  rate_info: RateInfo;
 }
 
 const getApiBaseUrl = () => {
@@ -324,7 +369,7 @@ class ApiClient {
     return user?.role === 'admin';
   }
 
-    // Баланс
+  // Баланс
   async getMyBalance(): Promise<BalanceInfo> {
     return this.request('/balance/my-balance', {
       method: 'GET',
@@ -344,16 +389,24 @@ class ApiClient {
     });
   }
 
-// Оплата через баланс (упрощенная)
+  // Оплата через баланс (упрощенная)
   async payWithBalance(paymentId: number): Promise<any> {
     return this.request('/payments/process-payment', {
       method: 'POST',
       body: JSON.stringify({
         payment_id: paymentId,
-        card_number: "balance", // Заглушка для совместимости
+        card_number: "balance",
         expiry_date: "12/99",
         cvv: "000"
       }),
+    });
+  }
+
+  // Оплата квитанции через баланс
+  async payReceipt(receiptId: number): Promise<any> {
+    return this.request('/payments/pay-receipt', {
+      method: 'POST',
+      body: JSON.stringify({ receipt_id: receiptId }),
     });
   }
 
@@ -378,6 +431,12 @@ class ApiClient {
     });
   }
 
+  async verifyReceipt(verificationData: ReceiptVerificationData): Promise<VerificationResult> {
+    return this.request('/payments/verify-receipt', {
+      method: 'POST',
+      body: JSON.stringify(verificationData),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

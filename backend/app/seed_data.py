@@ -6,6 +6,7 @@ from app.models.payments import ReceiptItem, UtilityService, Payment, MeterReadi
 from app.models.users import Users
 from datetime import datetime, timedelta
 from decimal import Decimal
+import random
 
 async def seed_database(session: AsyncSession):
     """Заполнение базы данных начальными данными"""
@@ -146,7 +147,7 @@ async def seed_database(session: AsyncSession):
     await session.commit()
     print("Балансы пользователей установлены")
     
-    # Создаем тестовые платежи и показания для обычных пользователей
+    # Создаем тестовые платежи для обычных пользователей
     regular_users = [user for user in created_users if user.role == 'user']
     
     for user in regular_users:
@@ -177,45 +178,17 @@ async def seed_database(session: AsyncSession):
     await session.commit()
     print("Исторические данные созданы")
     
-    # СОЗДАЕМ НЕОПЛАЧЕННЫЕ КВИТАНЦИИ ДЛЯ ТЕСТИРОВАНИЯ
-    print("Создаем неоплаченные квитанции для тестирования...")
+    # СОЗДАЕМ КВИТАНЦИИ С ДЕТАЛЬНОЙ РАЗБИВКОЙ (ТОЛЬКО ОДИН РАЗ)
+    print("Создаем квитанции с детальной разбивкой...")
     
-    # Создаем квитанции за разные месяцы
+    # Создаем квитанции за разные месяцы - ТОЛЬКО 3 месяца
     months = [
         (datetime(2024, 2, 1), "Февраль 2024"),
         (datetime(2024, 3, 1), "Март 2024"),
         (datetime(2024, 4, 1), "Апрель 2024")
     ]
     
-    for user in regular_users:
-        for period, period_name in months:
-            # Создаем квитанции с разными суммами в зависимости от пользователя
-            base_amount = Decimal('2500.0')  # Базовая сумма
-            
-            # Добавляем вариативность в зависимости от пользователя
-            if user.email == 'user1@example.com':
-                total_amount = base_amount + Decimal('500.0')  # 3000 руб
-            elif user.email == 'user2@example.com':
-                total_amount = base_amount + Decimal('200.0')  # 2700 руб
-            elif user.email == 'user3@example.com':
-                total_amount = base_amount - Decimal('300.0')  # 2200 руб
-            else:
-                total_amount = base_amount  # 2500 руб
-            
-            # Определяем статус в зависимости от периода
-            # За февраль - оплаченные, за март и апрель - неоплаченные
-            status = 'paid' if period.month == 2 else 'generated'
-            
-            receipt = Receipt(
-                user_id=user.id,
-                total_amount=total_amount,
-                period=period,
-                generated_date=period + timedelta(days=2),
-                status=status
-            )
-            session.add(receipt)
-            print(f"Создана квитанция для {user.email} за {period_name}: {total_amount} руб, статус: {status}")
-    
+    # Шаблоны потребления для разных пользователей
     consumption_patterns = {
         'user1@example.com': {
             'Электроэнергия': 250,  # кВт·ч
@@ -251,6 +224,7 @@ async def seed_database(session: AsyncSession):
         }
     }
     
+    receipt_count = 0
     for user in regular_users:
         user_pattern = consumption_patterns.get(user.email, consumption_patterns['user1@example.com'])
         
@@ -261,7 +235,12 @@ async def seed_database(session: AsyncSession):
             # Создаем элементы квитанции для каждой услуги
             for service in utility_services:
                 if service.name in user_pattern:
-                    quantity = Decimal(str(user_pattern[service.name]))
+                    # Добавляем небольшую случайную вариацию к потреблению
+                    base_quantity = Decimal(str(user_pattern[service.name]))
+                    variation = Decimal(str(random.uniform(-0.1, 0.1)))  # ±10% вариация
+                    quantity = max(base_quantity * (Decimal('1') + variation), Decimal('0.1'))
+                    quantity = round(quantity, 2)
+                    
                     rate = service.rate
                     amount = quantity * rate
                     total_amount += amount
@@ -274,7 +253,7 @@ async def seed_database(session: AsyncSession):
                     }
                     receipt_items.append(receipt_item_data)
             
-            # Определяем статус
+            # Определяем статус - за февраль оплаченные, за март и апрель неоплаченные
             status = 'paid' if period.month == 2 else 'generated'
             
             # Создаем квитанцию
@@ -299,10 +278,11 @@ async def seed_database(session: AsyncSession):
                 )
                 session.add(receipt_item)
             
-            print(f"Создана квитанция для {user.email} за {period_name}: {total_amount} руб")
+            receipt_count += 1
+            print(f"Создана квитанция для {user.email} за {period_name}: {total_amount:.2f} руб ({len(receipt_items)} услуг)")
     
     await session.commit()
-    print("Квитанции с детальной разбивкой созданы")
+    print(f"Квитанции с детальной разбивкой созданы: {receipt_count} квитанций")
     
     # Создаем несколько транзакций баланса для истории
     print("Создаем историю транзакций баланса...")
@@ -355,9 +335,23 @@ async def seed_database(session: AsyncSession):
             print(f"- {user.email}: {user.full_name}")
             print(f"  Баланс: {user.balance} руб")
             print(f"  Адрес: {user.address}")
+    
+    # Подсчитываем реальное количество квитанций
+    result = await session.execute(select(Receipt))
+    all_receipts = result.scalars().all()
+    print(f"\nСоздано всего квитанций: {len(all_receipts)}")
+    
+    for user in regular_users:
+        user_receipts = [r for r in all_receipts if r.user_id == user.id]
+        print(f"- {user.email}: {len(user_receipts)} квитанций")
+    
     print("\nДЛЯ ТЕСТИРОВАНИЯ РЕКОМЕНДУЕТСЯ:")
-    print("1. user1@example.com - мало средств (500 руб), есть большая квитанция (5500 руб)")
-    print("2. user2@example.com - нормальный баланс (2000 руб), есть небольшая квитанция (1800 руб)") 
-    print("3. user3@example.com - очень мало средств (100 руб), квитанция превышает баланс (3200 руб)")
+    print("1. user1@example.com - мало средств (500 руб)")
+    print("2. user2@example.com - нормальный баланс (2000 руб)") 
+    print("3. user3@example.com - очень мало средств (100 руб)")
     print("4. user4@example.com - стандартный баланс (1500 руб)")
+    print("\nКВИТАНЦИИ:")
+    print("- Февраль 2024: оплаченные (по 1 на пользователя)")
+    print("- Март 2024: неоплаченные (по 1 на пользователя)")
+    print("- Апрель 2024: неоплаченные (по 1 на пользователя)")
     print("=" * 50)
